@@ -1,12 +1,16 @@
-import { bold, italic } from "chalk"
+import { bold, green, italic } from "chalk"
 import * as process from "process"
 import * as minimist from "minimist"
 
 import { applyPatchesForApp } from "./applyPatches"
-import getAppRootPath from "./getAppRootPath"
-import makePatch from "./makePatch"
-import makeRegExp from "./makeRegExp"
-import detectPackageManager from "./detectPackageManager"
+import { getAppRootPath } from "./getAppRootPath"
+import { makePatch } from "./makePatch"
+import { makeRegExp } from "./makeRegExp"
+import { detectPackageManager } from "./detectPackageManager"
+import { checkoutNodeModules } from "./checkoutNodeModules"
+import { cleanExistingPatch } from "./cleanExistingPatch"
+import { createTempDirectory } from "./createTempDirectory"
+import { preparePackageJson } from "./preparePackageJson"
 
 const appPath = getAppRootPath()
 const argv = minimist(process.argv.slice(2), {
@@ -17,31 +21,48 @@ const packageNames = argv._
 if (argv.help || argv.h) {
   printHelp()
 } else {
-  if (packageNames.length) {
-    const include = makeRegExp(
-      argv.include,
-      "include",
-      /.*/,
-      argv["case-sensitive-path-filtering"],
+  const tempDirectory = createTempDirectory()
+
+  try {
+    const tempDirectoryPath = tempDirectory.name
+
+    const packageManager = detectPackageManager(
+      appPath,
+      argv["use-yarn"] ? "yarn" : null,
     )
-    const exclude = makeRegExp(
-      argv.exclude,
-      "exclude",
-      /package\.json$/,
-      argv["case-sensitive-path-filtering"],
-    )
-    packageNames.forEach((packageName: string) => {
-      makePatch(
-        packageName,
-        appPath,
-        detectPackageManager(appPath, argv["use-yarn"] ? "yarn" : null),
-        include,
-        exclude,
+
+    console.info(green("☑"), "Creating temporary folder")
+
+    preparePackageJson(appPath, tempDirectoryPath)
+    checkoutNodeModules(appPath, tempDirectoryPath, packageManager)
+
+    if (packageNames.length) {
+      const include = makeRegExp(
+        argv.include,
+        "include",
+        /.*/,
+        argv["case-sensitive-path-filtering"],
       )
-    })
-  } else {
-    console.log("patch-package: Applying patches...")
-    applyPatchesForApp(appPath, !!argv["reverse"])
+      const exclude = makeRegExp(
+        argv.exclude,
+        "exclude",
+        /package\.json$/,
+        argv["case-sensitive-path-filtering"],
+      )
+
+      packageNames.forEach((packageName: string) => {
+        cleanExistingPatch(appPath, packageName)
+        makePatch(appPath, packageName, include, exclude, tempDirectoryPath)
+      })
+    } else {
+      console.log("patch-package: Applying patches...")
+      applyPatchesForApp(appPath, !!argv["reverse"])
+    }
+  } catch (e) {
+    console.error(e)
+    throw e
+  } finally {
+    tempDirectory.removeCallback()
   }
 }
 

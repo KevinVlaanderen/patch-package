@@ -1,6 +1,6 @@
 import { red } from "chalk"
 
-export default function makeRegExp(
+export function makeRegExp(
   reString: string,
   name: string,
   defaultValue: RegExp,

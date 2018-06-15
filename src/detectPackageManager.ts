@@ -5,7 +5,7 @@ import * as process from "process"
 
 export type PackageManager = "yarn" | "npm" | "npm-shrinkwrap"
 
-export default function detectPackageManager(
+export function detectPackageManager(
   appRootPath: string,
   overridePackageManager: PackageManager | null,
 ): PackageManager {
